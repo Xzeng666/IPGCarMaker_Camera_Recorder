@@ -6,6 +6,10 @@ CarMaker CameraRSI Recorder 通过 CarMaker / MovieNX 的 RSDS TCP 数据流采�
 
 > 本项目是独立开发的开源工具，与 IPG Automotive GmbH 无隶属或授权关系。CarMaker 和 MovieNX 是其各自权利人的商标。
 
+![六路 CameraRSI 演示地图](images/Example%20of%20Six-Channel%20CameraRSI%20Demo%20Map.jpg)
+
+![六路 CameraRSI 演示效果](images/Example%20of%20Six-Channel%20CameraRSI.jpg)
+
 ## 功能
 
 - 同时连接一个或多个 RSDS 端口，各端口独立重连

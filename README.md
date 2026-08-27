@@ -6,6 +6,10 @@ CarMaker CameraRSI Recorder captures multiple `CameraRSI` streams from CarMaker 
 
 > This is an independently developed open-source project. It is not affiliated with or endorsed by IPG Automotive GmbH. CarMaker and MovieNX are trademarks of their respective owners.
 
+![Six-channel CameraRSI demo map](images/Example%20of%20Six-Channel%20CameraRSI%20Demo%20Map.jpg)
+
+![Six-channel CameraRSI demo](images/Example%20of%20Six-Channel%20CameraRSI.jpg)
+
 ## Features
 
 - Connects to one or more RSDS ports with independent reconnection

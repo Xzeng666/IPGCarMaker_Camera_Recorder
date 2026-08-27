@@ -39,6 +39,10 @@
 !/examples/
 /examples/*
 !/examples/config_remote_multi_camera.json
+!/images/
+/images/*
+!/images/Example of Six-Channel CameraRSI Demo Map.jpg
+!/images/Example of Six-Channel CameraRSI.jpg
 !/docs/
 /docs/*
 !/docs/ARCHITECTURE.md

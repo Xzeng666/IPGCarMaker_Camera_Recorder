@@ -20,6 +20,8 @@ EXACT_FILES = {
     "docs/CONFIG_REFERENCE.md",
     "docs/VALIDATION.md",
     "examples/config_remote_multi_camera.json",
+    "images/Example of Six-Channel CameraRSI Demo Map.jpg",
+    "images/Example of Six-Channel CameraRSI.jpg",
     "pyproject.toml",
     "requirements-build.txt",
     "requirements-core.txt",
