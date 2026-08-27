@@ -1,0 +1,4 @@
+# Reproducible core environment for Python 3.13.
+# Use requirements-core.txt when broader platform compatibility is required.
+numpy==2.3.5
+opencv-python==4.13.0.92

@@ -1,0 +1,72 @@
+# This repository uses an allowlist. Root entries are ignored unless explicitly
+# included below. The repository check enforces the same policy for forced adds.
+/*
+
+# Repository metadata
+!/.editorconfig
+!/.gitattributes
+!/.gitignore
+!/LICENSE
+!/README.md
+!/README_CN.md
+!/VERSION
+!/pyproject.toml
+
+# Dependency manifests and default configuration
+!/config.json
+!/requirements.txt
+!/requirements-build.txt
+!/requirements-core.txt
+!/requirements-tested-core.txt
+
+# Entrypoints and platform scripts
+!/run.py
+!/run_gui.py
+!/verify_project.py
+
+# Python packages
+!/carmaker_recorder/
+/carmaker_recorder/*
+!/carmaker_recorder/*.py
+!/carmaker_gui/
+/carmaker_gui/*
+!/carmaker_gui/*.py
+
+# Tests, examples, documentation, and repository tooling
+!/tests/
+/tests/*
+!/tests/*.py
+!/examples/
+/examples/*
+!/examples/config_remote_multi_camera.json
+!/docs/
+/docs/*
+!/docs/ARCHITECTURE.md
+!/docs/CONFIG_REFERENCE.md
+!/docs/VALIDATION.md
+!/.githooks/
+/.githooks/*
+!/.githooks/pre-commit
+!/.github/
+/.github/*
+!/.github/workflows/
+/.github/workflows/*
+!/.github/workflows/ci.yml
+!/scripts/
+/scripts/*
+!/scripts/check_repository.py
+!/scripts/windows/
+/scripts/windows/*
+!/scripts/windows/build.bat
+!/scripts/windows/build.ps1
+!/scripts/windows/prepare_offline.bat
+!/scripts/windows/prepare_offline.ps1
+!/scripts/windows/start_cli.bat
+!/scripts/windows/start_cli.ps1
+!/scripts/windows/start_gui.bat
+!/scripts/windows/start_gui.ps1
+!/scripts/linux/
+/scripts/linux/*
+!/scripts/linux/prepare_offline.sh
+!/scripts/linux/start_cli.sh
+!/scripts/linux/start_gui.sh

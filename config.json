@@ -1,0 +1,60 @@
+{
+  "schema_version": 4,
+  "network": {
+    "host": "localhost",
+    "ports": [
+      2210
+    ],
+    "socket_timeout_sec": 3.0,
+    "connect_timeout_sec": 2.0,
+    "reconnect_delay_sec": 0.5,
+    "max_timeouts_before_reconnect": 1,
+    "header_size": 64,
+    "max_payload_bytes": 268435456
+  },
+  "buffers": {
+    "message_capacity": 512,
+    "frame_capacity": 180,
+    "image_task_capacity": 512
+  },
+  "video": {
+    "enabled": true,
+    "fps": 30.0,
+    "fourcc": "XVID",
+    "extension": "avi",
+    "max_gap_fill_frames": 60
+  },
+  "images": {
+    "enabled": true,
+    "sample_hz": 10.0,
+    "export_format": "jpg",
+    "jpeg_quality": 95
+  },
+  "reliability": {
+    "writer_failure_policy": "stop",
+    "min_free_disk_gb": 2.0,
+    "disk_check_interval_sec": 5.0,
+    "mark_degraded_on_drop": true,
+    "sim_time_reset_threshold_sec": 0.5
+  },
+  "logging": {
+    "level": "INFO",
+    "max_bytes": 10485760,
+    "backup_count": 5
+  },
+  "output": {
+    "save_root": "carmaker_videos",
+    "camera_names": {
+      "0": "FRONT",
+      "1": "FRONT_LEFT",
+      "2": "FRONT_RIGHT",
+      "3": "BACK_LEFT",
+      "4": "BACK_RIGHT",
+      "5": "BACK"
+    }
+  },
+  "gui": {
+    "live_preview": true,
+    "preview_hz": 2.0
+  }
+}
