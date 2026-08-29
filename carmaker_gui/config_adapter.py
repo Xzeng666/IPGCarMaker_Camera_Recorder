@@ -1,11 +1,26 @@
 from __future__ import annotations
 
-from typing import Dict
+from collections.abc import Callable
 
-from carmaker_recorder.config import SCHEMA_VERSION, AppConfig, config_from_dict, config_to_dict
+from carmaker_recorder.config import (
+    SCHEMA_VERSION,
+    AppConfig,
+    config_from_dict,
+    config_to_dict,
+)
 
 
-def parse_ports(text: str) -> list[int]:
+def parse_ports(text: str, translate: Callable[..., str] | None = None) -> list[int]:
+    messages = {
+        "validation.duplicate_port": "Duplicate RSDS port: {port}",
+        "validation.port_required": "Enter at least one RSDS port, for example 2210.",
+    }
+
+    def message(key: str, **values) -> str:
+        if translate is not None:
+            return translate(key, **values)
+        return messages[key].format(**values)
+
     normalized = text.replace(";", ",").replace("，", ",").replace(" ", ",")
     ports: list[int] = []
     for token in normalized.split(","):
@@ -14,15 +29,15 @@ def parse_ports(text: str) -> list[int]:
             continue
         port = int(token)
         if port in ports:
-            raise ValueError(f"RSDS 端口重复: {port}")
+            raise ValueError(message("validation.duplicate_port", port=port))
         ports.append(port)
     if not ports:
-        raise ValueError("至少需要填写一个 RSDS 端口，例如 2210")
+        raise ValueError(message("validation.port_required"))
     return ports
 
 
 def collect_from_window(window) -> AppConfig:
-    camera_names: Dict[str, str] = {}
+    camera_names: dict[str, str] = {}
     table = window.cameras_page.table
     for row in range(table.rowCount()):
         id_item = table.item(row, 0)
@@ -35,7 +50,9 @@ def collect_from_window(window) -> AppConfig:
             continue
         int(cam_id)
         if cam_id in camera_names:
-            raise ValueError(f"CameraRSI ID 重复: {cam_id}")
+            raise ValueError(
+                window.i18n.text("validation.duplicate_camera", camera_id=cam_id)
+            )
         camera_names[cam_id] = name
 
     raw = {
@@ -48,7 +65,9 @@ def collect_from_window(window) -> AppConfig:
             "reconnect_delay_sec": window.advanced_page.reconnect_delay.value(),
             "max_timeouts_before_reconnect": window.advanced_page.max_timeouts.value(),
             "header_size": window.advanced_page.header_size.value(),
-            "max_payload_bytes": window.advanced_page.max_payload_mb.value() * 1024 * 1024,
+            "max_payload_bytes": window.advanced_page.max_payload_mb.value()
+            * 1024
+            * 1024,
         },
         "buffers": {
             "message_capacity": window.advanced_page.message_capacity.value(),
@@ -59,7 +78,9 @@ def collect_from_window(window) -> AppConfig:
             "enabled": window.connection_page.video_enabled.isChecked(),
             "fps": window.connection_page.video_fps.value(),
             "fourcc": window.advanced_page.fourcc.text().strip().upper(),
-            "extension": window.advanced_page.video_extension.text().strip().lstrip("."),
+            "extension": window.advanced_page.video_extension.text()
+            .strip()
+            .lstrip("."),
             "max_gap_fill_frames": window.advanced_page.max_gap_fill_frames.value(),
         },
         "images": {
@@ -69,7 +90,7 @@ def collect_from_window(window) -> AppConfig:
             "jpeg_quality": window.connection_page.jpeg_quality.value(),
         },
         "reliability": {
-            "writer_failure_policy": window.advanced_page.writer_failure_policy.currentText(),
+            "writer_failure_policy": window.advanced_page.writer_failure_policy.currentData(),
             "min_free_disk_gb": window.advanced_page.min_free_disk_gb.value(),
             "disk_check_interval_sec": window.advanced_page.disk_check_interval.value(),
             "mark_degraded_on_drop": window.advanced_page.mark_degraded_on_drop.isChecked(),
@@ -124,12 +145,18 @@ def apply_to_window(window, config: AppConfig) -> None:
     adv.max_timeouts.setValue(int(net["max_timeouts_before_reconnect"]))
     adv.reconnect_delay.setValue(float(net["reconnect_delay_sec"]))
     adv.header_size.setValue(int(net["header_size"]))
-    adv.max_payload_mb.setValue(max(1, int(round(net["max_payload_bytes"] / (1024 * 1024)))))
+    adv.max_payload_mb.setValue(
+        max(1, int(round(net["max_payload_bytes"] / (1024 * 1024))))
+    )
     adv.fourcc.setText(video["fourcc"])
     adv.video_extension.setText(video["extension"])
     adv.max_gap_fill_frames.setValue(int(video["max_gap_fill_frames"]))
     reliability = raw["reliability"]
-    adv.writer_failure_policy.setCurrentText(reliability["writer_failure_policy"])
+    policy_index = adv.writer_failure_policy.findData(
+        reliability["writer_failure_policy"]
+    )
+    if policy_index >= 0:
+        adv.writer_failure_policy.setCurrentIndex(policy_index)
     adv.min_free_disk_gb.setValue(float(reliability["min_free_disk_gb"]))
     adv.disk_check_interval.setValue(float(reliability["disk_check_interval_sec"]))
     adv.mark_degraded_on_drop.setChecked(bool(reliability["mark_degraded_on_drop"]))

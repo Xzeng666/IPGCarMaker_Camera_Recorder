@@ -22,6 +22,8 @@ EXACT_FILES = {
     "examples/config_remote_multi_camera.json",
     "images/Example of Six-Channel CameraRSI Demo Map.jpg",
     "images/Example of Six-Channel CameraRSI.jpg",
+    "images/gui-overview-en.png",
+    "images/gui-overview-zh.png",
     "pyproject.toml",
     "requirements-build.txt",
     "requirements-core.txt",

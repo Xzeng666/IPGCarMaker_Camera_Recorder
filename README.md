@@ -18,7 +18,12 @@ CarMaker CameraRSI Recorder captures multiple `CameraRSI` streams from CarMaker 
 - Reports queue drops, writer health, throughput, and free disk space
 - Starts a new video segment after resolution changes or large time gaps
 - Creates an isolated output directory and `session_manifest.json` for every capture
+- Provides an English and Chinese desktop interface with automatic first-run language detection and saved preferences
 - Includes Windows and Linux launchers plus a portable Windows build script
+
+## Desktop interface
+
+![CarMaker CameraRSI Recorder desktop interface](images/gui-overview-en.png)
 
 ## Requirements
 

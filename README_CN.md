@@ -18,7 +18,12 @@ CarMaker CameraRSI Recorder 通过 CarMaker / MovieNX 的 RSDS TCP 数据流采�
 - 记录队列丢帧、写入状态、吞吐率和磁盘余量
 - 视频分辨率或时间跨度变化时自动分段
 - 每次采集生成独立目录和 `session_manifest.json`
+- 提供中英文图形界面，首次启动自动检测系统语言，并记住后续的语言选择
 - 提供 Windows、Linux 启动脚本及 Windows 便携版构建脚本
+
+## 图形界面
+
+![CarMaker CameraRSI Recorder 中文界面](images/gui-overview-zh.png)
 
 ## 环境要求
 

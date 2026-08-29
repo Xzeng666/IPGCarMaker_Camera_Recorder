@@ -44,6 +44,10 @@ def stylesheet() -> str:
         background: {c['sidebar']};
         border-right: 1px solid {c['border_soft']};
     }}
+    QFrame#TopBar {{
+        background: {c['panel']};
+        border-bottom: 1px solid {c['border_soft']};
+    }}
     QLabel#BrandTitle {{
         font-size: 18px;
         font-weight: 700;
@@ -51,6 +55,21 @@ def stylesheet() -> str:
     }}
     QLabel#BrandSubtitle, QLabel#MutedLabel, QLabel#FieldHint {{
         color: {c['muted']};
+    }}
+    QFrame#LanguagePanel {{
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid {c['border_soft']};
+        border-radius: 7px;
+    }}
+    QLabel#LanguageLabel {{
+        color: {c['muted']};
+        font-size: 12px;
+        font-weight: 700;
+    }}
+    QComboBox#LanguageCombo {{
+        background: {c['panel']};
+        min-height: 30px;
+        padding: 4px 9px;
     }}
     QLabel#PageTitle {{
         font-size: 24px;

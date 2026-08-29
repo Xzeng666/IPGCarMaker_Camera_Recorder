@@ -1,5 +1,5 @@
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -14,6 +14,7 @@ class ButtonBindingStaticTests(unittest.TestCase):
             "self.start_button.clicked.connect(self.start_recording)",
             "self.stop_button.clicked.connect(self.stop_recording)",
             "self.connection_page.test_button.clicked.connect(self.test_connection)",
+            "self.language_combo.currentIndexChanged.connect(self._on_language_changed)",
             "self.save_action.triggered.connect(self.save_current_config)",
         ]
         for binding in expected:
@@ -35,10 +36,18 @@ class ButtonBindingStaticTests(unittest.TestCase):
 
     def test_dependency_toggle_bindings(self):
         text = (ROOT / "carmaker_gui" / "pages.py").read_text(encoding="utf-8")
-        self.assertIn("self.video_enabled.toggled.connect(self.video_fps.setEnabled)", text)
-        self.assertIn("self.images_enabled.toggled.connect(self.image_hz.setEnabled)", text)
-        self.assertIn("self.images_enabled.toggled.connect(self.image_format.setEnabled)", text)
-        self.assertIn("self.images_enabled.toggled.connect(self.jpeg_quality.setEnabled)", text)
+        self.assertIn(
+            "self.video_enabled.toggled.connect(self.video_fps.setEnabled)", text
+        )
+        self.assertIn(
+            "self.images_enabled.toggled.connect(self.image_hz.setEnabled)", text
+        )
+        self.assertIn(
+            "self.images_enabled.toggled.connect(self.image_format.setEnabled)", text
+        )
+        self.assertIn(
+            "self.images_enabled.toggled.connect(self.jpeg_quality.setEnabled)", text
+        )
 
     def test_path_browse_binding(self):
         text = (ROOT / "carmaker_gui" / "widgets.py").read_text(encoding="utf-8")

@@ -22,6 +22,7 @@ Automated coverage includes:
 - Session directory uniqueness and Manifest generation
 - disk preflight failure
 - GUI control policy and static signal bindings
+- system-language fallback, language preference persistence, and live interface switching
 - optional real Qt mouse Start→Stop test when PySide6 is installed
 - optional offscreen GUI smoke test in `verify_project.py`
 - packaged Windows GUI smoke test after `scripts/windows/build.ps1`

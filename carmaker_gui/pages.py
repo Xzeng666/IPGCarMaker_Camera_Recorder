@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QSpinBox,
     QTableWidget,
@@ -26,29 +28,37 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .i18n import LanguageManager
 from .widgets import CameraCard, MetricCard, PathField, StatusPill
 
 
-def _page_header(title: str, subtitle: str) -> QVBoxLayout:
+def _page_header() -> tuple[QVBoxLayout, QLabel, QLabel]:
     layout = QVBoxLayout()
     layout.setSpacing(5)
-    title_label = QLabel(title)
+    title_label = QLabel()
     title_label.setObjectName("PageTitle")
     title_label.setWordWrap(True)
-    subtitle_label = QLabel(subtitle)
+    subtitle_label = QLabel()
     subtitle_label.setObjectName("PageSubtitle")
     subtitle_label.setWordWrap(True)
     subtitle_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
     layout.addWidget(title_label)
     layout.addWidget(subtitle_label)
-    return layout
+    return layout, title_label, subtitle_label
 
 
-def _hint(text: str) -> QLabel:
-    label = QLabel(text)
+def _hint() -> QLabel:
+    label = QLabel()
     label.setObjectName("FieldHint")
     label.setWordWrap(True)
     label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+    return label
+
+
+def _add_form_row(form: QFormLayout, field) -> QLabel:
+    label = QLabel()
+    label.setWordWrap(True)
+    form.addRow(label, field)
     return label
 
 
@@ -61,38 +71,49 @@ def _configure_form(form: QFormLayout) -> None:
     form.setVerticalSpacing(12)
 
 
+def _localized_status(i18n: LanguageManager, state: str) -> str:
+    return i18n.text(f"status.{str(state).lower()}")
+
+
 class DashboardPage(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, i18n: LanguageManager, parent=None):
         super().__init__(parent)
+        self.i18n = i18n
+        self._last_snapshot: dict | None = None
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 22, 24, 24)
         layout.setSpacing(16)
-        layout.addLayout(_page_header("采集监控", "实时查看连接、数据完整性、磁盘余量与多路 CameraRSI 状态。"))
+        header, self.page_title, self.page_subtitle = _page_header()
+        layout.addLayout(header)
 
         top = QGridLayout()
         top.setHorizontalSpacing(12)
         top.setVerticalSpacing(12)
-        for col in range(2):
-            top.setColumnStretch(col, 1)
-        self.state_card = MetricCard("采集状态", "STOPPED", "尚未启动")
-        self.connection_card = MetricCard("RSDS 连接", "0 / 0", "等待连接")
-        self.camera_card = MetricCard("活动摄像头", "0", "CameraRSI")
-        self.session_card = MetricCard("当前 Scene", "—", "暂无 Session")
-        self.integrity_card = MetricCard("数据健康", "OK", "无丢帧/组件错误")
-        self.disk_card = MetricCard("磁盘可用", "—", "等待检测")
+        for column in range(2):
+            top.setColumnStretch(column, 1)
+        self.state_card = MetricCard("")
+        self.connection_card = MetricCard("")
+        self.camera_card = MetricCard("")
+        self.session_card = MetricCard("")
+        self.integrity_card = MetricCard("")
+        self.disk_card = MetricCard("")
         cards = [
-            self.state_card, self.connection_card,
-            self.camera_card, self.session_card,
-            self.integrity_card, self.disk_card,
+            self.state_card,
+            self.connection_card,
+            self.camera_card,
+            self.session_card,
+            self.integrity_card,
+            self.disk_card,
         ]
-        for i, card in enumerate(cards):
-            top.addWidget(card, i // 2, i % 2)
+        for index, card in enumerate(cards):
+            top.addWidget(card, index // 2, index % 2)
         layout.addLayout(top)
 
-        camera_title = QLabel("CameraRSI 实时预览")
-        camera_title.setObjectName("SectionTitle")
-        layout.addWidget(camera_title)
-        self.preview_hint = _hint("GUI 预览为独立低优先级编码线程，仅用于监控，不参与视频/图片采集时序。")
+        self.camera_title = QLabel()
+        self.camera_title.setObjectName("SectionTitle")
+        layout.addWidget(self.camera_title)
+        self.preview_hint = _hint()
         layout.addWidget(self.preview_hint)
 
         self.camera_grid = QGridLayout()
@@ -101,7 +122,7 @@ class DashboardPage(QWidget):
         self.camera_grid.setColumnStretch(0, 1)
         self.camera_grid.setColumnStretch(1, 1)
         self.camera_cards: dict[str, CameraCard] = {}
-        self.placeholder = QLabel("启动采集后，检测到的 CameraRSI 通道会自动显示在这里。")
+        self.placeholder = QLabel()
         self.placeholder.setObjectName("MutedLabel")
         self.placeholder.setAlignment(Qt.AlignCenter)
         self.placeholder.setWordWrap(True)
@@ -109,47 +130,89 @@ class DashboardPage(QWidget):
         self.camera_grid.addWidget(self.placeholder, 0, 0, 1, 2)
         layout.addLayout(self.camera_grid, 1)
 
+        self.retranslate_ui()
+
+    def retranslate_ui(self) -> None:
+        t = self.i18n.text
+        self.page_title.setText(t("dashboard.title"))
+        self.page_subtitle.setText(t("dashboard.subtitle"))
+        self.state_card.set_title(t("dashboard.capture_state"))
+        self.connection_card.set_title(t("dashboard.rsds_connections"))
+        self.camera_card.set_title(t("dashboard.active_cameras"))
+        self.session_card.set_title(t("dashboard.current_scene"))
+        self.integrity_card.set_title(t("dashboard.data_health"))
+        self.disk_card.set_title(t("dashboard.disk_free"))
+        self.camera_title.setText(t("dashboard.preview_title"))
+        self.preview_hint.setText(t("dashboard.preview_hint"))
+        self.placeholder.setText(t("dashboard.preview_empty"))
+        for card in self.camera_cards.values():
+            card.retranslate_ui()
+        if self._last_snapshot is None:
+            self.state_card.set_value(t("status.stopped"), t("dashboard.not_started"))
+            self.connection_card.set_value("0 / 0", t("dashboard.awaiting_connection"))
+            self.camera_card.set_value("0", t("dashboard.camera_rsi"))
+            self.session_card.set_value("—", t("dashboard.no_session"))
+            self.integrity_card.set_value(t("status.ok"), t("dashboard.no_errors"))
+            self.disk_card.set_value("—", t("dashboard.awaiting_check"))
+        else:
+            self.update_snapshot(self._last_snapshot)
+
     def _ensure_camera(self, cam_id: str, name: str) -> CameraCard:
         if cam_id in self.camera_cards:
             return self.camera_cards[cam_id]
         self.placeholder.hide()
-        card = CameraCard(cam_id, name)
+        card = CameraCard(self.i18n, cam_id, name)
         self.camera_cards[cam_id] = card
         index = len(self.camera_cards) - 1
         self.camera_grid.addWidget(card, index // 2, index % 2)
         return card
 
     def update_snapshot(self, snapshot: dict) -> None:
-        import time
-
+        self._last_snapshot = snapshot
+        t = self.i18n.text
         state = snapshot.get("state", "STOPPED")
         uptime = float(snapshot.get("uptime_sec", 0.0))
-        self.state_card.set_value(state, f"运行 {uptime:.1f} 秒" if uptime else "尚未启动")
+        runtime_text = (
+            t("dashboard.runtime", seconds=uptime)
+            if uptime
+            else t("dashboard.not_started")
+        )
+        self.state_card.set_value(_localized_status(self.i18n, state), runtime_text)
 
         connections = snapshot.get("connections", {})
         connected = sum(1 for status in connections.values() if status == "CONNECTED")
+        connection_detail = " · ".join(
+            f"{port}:{_localized_status(self.i18n, status)}"
+            for port, status in connections.items()
+        ) or t("dashboard.no_ports")
         self.connection_card.set_value(
-            f"{connected} / {len(connections)}",
-            " · ".join(f"{p}:{s}" for p, s in connections.items()) or "无端口",
+            f"{connected} / {len(connections)}", connection_detail
         )
 
         cameras = snapshot.get("cameras", {})
         active_count = 0
         now = time.time()
-        for cam_id, data in sorted(cameras.items(), key=lambda x: int(x[0]) if str(x[0]).isdigit() else 9999):
+        for cam_id, data in sorted(
+            cameras.items(),
+            key=lambda item: int(item[0]) if str(item[0]).isdigit() else 9999,
+        ):
             active = (now - float(data.get("last_seen_epoch", 0.0))) < 2.5
             active_count += int(active)
-            self._ensure_camera(str(cam_id), data.get("name", str(cam_id))).update_camera(str(cam_id), data, active)
-        self.camera_card.set_value(str(active_count), f"已识别 {len(cameras)} 路")
+            card = self._ensure_camera(str(cam_id), data.get("name", str(cam_id)))
+            card.update_camera(str(cam_id), data, active)
+        self.camera_card.set_value(
+            str(active_count), t("dashboard.detected_cameras", count=len(cameras))
+        )
 
         scene = snapshot.get("scene_id") or "—"
-        root = snapshot.get("session_root") or "暂无 Session"
+        root = snapshot.get("session_root") or t("dashboard.no_session")
         self.session_card.set_value(f"scene-{scene}" if scene != "—" else "—", root)
 
         network_drops = int(snapshot.get("network_drops", 0))
         queue_drops = sum(
-            int(cam.get("video_queue_drops", 0)) + int(cam.get("image_queue_drops", 0))
-            for cam in cameras.values()
+            int(camera.get("video_queue_drops", 0))
+            + int(camera.get("image_queue_drops", 0))
+            for camera in cameras.values()
         )
         errors = snapshot.get("errors", [])
         warnings = snapshot.get("warnings", [])
@@ -160,248 +223,523 @@ class DashboardPage(QWidget):
         else:
             health = "OK"
         self.integrity_card.set_value(
-            health,
-            f"Network drop {network_drops} · Queue drop {queue_drops} · Error {len(errors)}",
+            _localized_status(self.i18n, health),
+            t(
+                "dashboard.health_detail",
+                network=network_drops,
+                queue=queue_drops,
+                errors=len(errors),
+            ),
         )
         disk = snapshot.get("disk_free_gb")
-        self.disk_card.set_value("—" if disk is None else f"{float(disk):.1f} GiB", "运行期持续检测")
+        self.disk_card.set_value(
+            "—" if disk is None else f"{float(disk):.1f} GiB",
+            t("dashboard.continuous_check"),
+        )
 
 
 class ConnectionPage(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, i18n: LanguageManager, parent=None):
         super().__init__(parent)
+        self.i18n = i18n
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 22, 24, 24)
         layout.setSpacing(16)
-        layout.addLayout(_page_header("连接与采集", "默认即可连接本机 CarMaker；多端口之间相互独立重连。"))
+        header, self.page_title, self.page_subtitle = _page_header()
+        layout.addLayout(header)
 
-        network = QGroupBox("CarMaker / MovieNX 连接")
-        form = QFormLayout(network)
+        self.network_group = QGroupBox()
+        form = QFormLayout(self.network_group)
         _configure_form(form)
         self.host = QLineEdit("localhost")
-        self.host.setPlaceholderText("localhost 或 192.168.1.100")
         self.host.setMinimumWidth(280)
         self.ports = QLineEdit("2210")
-        self.ports.setPlaceholderText("2210 或 2210,2211,2212")
         self.ports.setMinimumWidth(280)
-        self.test_button = QPushButton("测试 TCP 连接")
-        self.test_status = StatusPill("IDLE")
+        self.test_button = QPushButton()
+        self.test_status = StatusPill(i18n, "IDLE")
         test_row = QHBoxLayout()
         test_row.setSpacing(10)
         test_row.addWidget(self.test_button)
         test_row.addWidget(self.test_status)
         test_row.addStretch(1)
-        form.addRow("主机 / IP", self.host)
-        form.addRow("RSDS 端口", self.ports)
-        form.addRow("连通性", test_row)
-        form.addRow("", _hint("每个端口独立建立 TCP/RSDS 连接；单路掉线不会主动中断其他正常通道。"))
-        layout.addWidget(network)
+        self.host_label = _add_form_row(form, self.host)
+        self.ports_label = _add_form_row(form, self.ports)
+        self.test_label = _add_form_row(form, test_row)
+        self.network_hint = _hint()
+        form.addRow("", self.network_hint)
+        layout.addWidget(self.network_group)
 
-        capture = QGroupBox("输出策略")
-        cform = QFormLayout(capture)
-        _configure_form(cform)
-        self.video_enabled = QCheckBox("保存视频")
+        self.capture_group = QGroupBox()
+        capture_form = QFormLayout(self.capture_group)
+        _configure_form(capture_form)
+        self.video_enabled = QCheckBox()
         self.video_enabled.setChecked(True)
-        self.video_fps = QDoubleSpinBox(); self.video_fps.setRange(1.0, 240.0); self.video_fps.setDecimals(1); self.video_fps.setValue(30.0); self.video_fps.setSuffix(" FPS")
-        self.images_enabled = QCheckBox("保存图片")
+        self.video_fps = QDoubleSpinBox()
+        self.video_fps.setRange(1.0, 240.0)
+        self.video_fps.setDecimals(1)
+        self.video_fps.setValue(30.0)
+        self.video_fps.setSuffix(" FPS")
+        self.images_enabled = QCheckBox()
         self.images_enabled.setChecked(True)
-        self.image_hz = QDoubleSpinBox(); self.image_hz.setRange(0.1, 240.0); self.image_hz.setDecimals(1); self.image_hz.setValue(10.0); self.image_hz.setSuffix(" Hz")
-        self.image_format = QComboBox(); self.image_format.addItems(["jpg", "auto", "ppm", "g8", "g16", "raw"])
-        self.jpeg_quality = QSpinBox(); self.jpeg_quality.setRange(1, 100); self.jpeg_quality.setValue(95); self.jpeg_quality.setSuffix(" %")
-        self.gui_preview = QCheckBox("在 GUI 中显示低频实时预览"); self.gui_preview.setChecked(True)
-        for control in [self.video_fps, self.image_hz, self.image_format, self.jpeg_quality]:
+        self.image_hz = QDoubleSpinBox()
+        self.image_hz.setRange(0.1, 240.0)
+        self.image_hz.setDecimals(1)
+        self.image_hz.setValue(10.0)
+        self.image_hz.setSuffix(" Hz")
+        self.image_format = QComboBox()
+        self.image_format.addItems(["jpg", "auto", "ppm", "g8", "g16", "raw"])
+        self.jpeg_quality = QSpinBox()
+        self.jpeg_quality.setRange(1, 100)
+        self.jpeg_quality.setValue(95)
+        self.jpeg_quality.setSuffix(" %")
+        self.gui_preview = QCheckBox()
+        self.gui_preview.setChecked(True)
+        for control in [
+            self.video_fps,
+            self.image_hz,
+            self.image_format,
+            self.jpeg_quality,
+        ]:
             control.setMinimumWidth(150)
-        cform.addRow("视频输出", self.video_enabled)
-        cform.addRow("视频帧率", self.video_fps)
-        cform.addRow("图片输出", self.images_enabled)
-        cform.addRow("图片采样率", self.image_hz)
-        cform.addRow("图片格式", self.image_format)
-        cform.addRow("JPG 质量", self.jpeg_quality)
-        cform.addRow("GUI 监控", self.gui_preview)
-        cform.addRow("", _hint("图片采样使用仿真时间周期调度，不再使用浮点乘法截断索引。"))
-        layout.addWidget(capture)
+        self.video_enabled_label = _add_form_row(capture_form, self.video_enabled)
+        self.video_fps_label = _add_form_row(capture_form, self.video_fps)
+        self.images_enabled_label = _add_form_row(capture_form, self.images_enabled)
+        self.image_hz_label = _add_form_row(capture_form, self.image_hz)
+        self.image_format_label = _add_form_row(capture_form, self.image_format)
+        self.jpeg_quality_label = _add_form_row(capture_form, self.jpeg_quality)
+        self.gui_preview_label = _add_form_row(capture_form, self.gui_preview)
+        self.sampling_hint = _hint()
+        capture_form.addRow("", self.sampling_hint)
+        layout.addWidget(self.capture_group)
         layout.addStretch(1)
 
         self.video_enabled.toggled.connect(self.video_fps.setEnabled)
         self.images_enabled.toggled.connect(self.image_hz.setEnabled)
         self.images_enabled.toggled.connect(self.image_format.setEnabled)
         self.images_enabled.toggled.connect(self.jpeg_quality.setEnabled)
+        self.retranslate_ui()
+
+    def retranslate_ui(self) -> None:
+        t = self.i18n.text
+        self.page_title.setText(t("connection.title"))
+        self.page_subtitle.setText(t("connection.subtitle"))
+        self.network_group.setTitle(t("connection.network_group"))
+        self.host_label.setText(t("connection.host"))
+        self.host.setPlaceholderText(t("connection.host_placeholder"))
+        self.ports_label.setText(t("connection.ports"))
+        self.ports.setPlaceholderText(t("connection.ports_placeholder"))
+        self.test_label.setText(t("connection.connectivity"))
+        self.test_button.setText(t("connection.test"))
+        self.test_status.retranslate_ui()
+        self.network_hint.setText(t("connection.network_hint"))
+        self.capture_group.setTitle(t("connection.output_group"))
+        self.video_enabled_label.setText(t("connection.video_output"))
+        self.video_enabled.setText(t("connection.save_video"))
+        self.video_fps_label.setText(t("connection.video_fps"))
+        self.images_enabled_label.setText(t("connection.image_output"))
+        self.images_enabled.setText(t("connection.save_images"))
+        self.image_hz_label.setText(t("connection.image_rate"))
+        self.image_format_label.setText(t("connection.image_format"))
+        self.jpeg_quality_label.setText(t("connection.jpeg_quality"))
+        self.gui_preview_label.setText(t("connection.gui_monitor"))
+        self.gui_preview.setText(t("connection.show_preview"))
+        self.sampling_hint.setText(t("connection.sampling_hint"))
 
 
 class OutputPage(QWidget):
-    def __init__(self, base_dir: Path, parent=None):
+    def __init__(self, i18n: LanguageManager, base_dir: Path, parent=None):
         super().__init__(parent)
+        self.i18n = i18n
         self.base_dir = base_dir
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 22, 24, 24)
         layout.setSpacing(16)
-        layout.addLayout(_page_header("采集输出", "每次有效采集都会生成独立 Session 和 Manifest。"))
+        header, self.page_title, self.page_subtitle = _page_header()
+        layout.addLayout(header)
 
-        out = QGroupBox("采集输出")
-        form = QFormLayout(out)
+        self.output_group = QGroupBox()
+        form = QFormLayout(self.output_group)
         _configure_form(form)
-        self.save_root = PathField("例如 D:/CarMakerCapture 或 carmaker_videos", "选择采集输出目录")
-        self.open_output = QPushButton("打开当前输出目录")
-        open_row = QHBoxLayout(); open_row.addWidget(self.open_output); open_row.addStretch(1)
-        form.addRow("输出根目录", self.save_root)
+        self.save_root = PathField(i18n)
+        self.save_root_label = _add_form_row(form, self.save_root)
+        self.open_output = QPushButton()
+        open_row = QHBoxLayout()
+        open_row.addWidget(self.open_output)
+        open_row.addStretch(1)
         form.addRow("", open_row)
-        form.addRow("", _hint("运行日志位于输出根目录 logs/；每次有效采集生成独立 Session 和 session_manifest.json。"))
-        layout.addWidget(out)
-
+        self.output_hint = _hint()
+        form.addRow("", self.output_hint)
+        layout.addWidget(self.output_group)
         layout.addStretch(1)
 
         self.open_output.clicked.connect(self._open_output)
+        self.retranslate_ui()
+
+    def retranslate_ui(self) -> None:
+        t = self.i18n.text
+        self.page_title.setText(t("output.title"))
+        self.page_subtitle.setText(t("output.subtitle"))
+        self.output_group.setTitle(t("output.group"))
+        self.save_root_label.setText(t("output.root"))
+        self.save_root.retranslate_ui()
+        self.open_output.setText(t("output.open_directory"))
+        self.output_hint.setText(t("output.hint"))
 
     def _open_output(self) -> None:
+        t = self.i18n.text
         raw = self.save_root.text()
         if not raw:
-            QMessageBox.information(self, "输出目录", "请先填写输出根目录。")
+            QMessageBox.information(
+                self, t("output.missing_title"), t("output.missing_message")
+            )
             return
         try:
             expanded = os.path.expandvars(os.path.expanduser(raw))
-            p = Path(expanded)
-            if not p.is_absolute():
-                p = self.base_dir / p
-            p.mkdir(parents=True, exist_ok=True)
-            resolved = p.resolve()
+            path = Path(expanded)
+            if not path.is_absolute():
+                path = self.base_dir / path
+            path.mkdir(parents=True, exist_ok=True)
+            resolved = path.resolve()
             if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(resolved))):
-                QMessageBox.warning(self, "无法打开目录", f"系统未能打开：\n{resolved}")
+                QMessageBox.warning(
+                    self,
+                    t("output.open_failed_title"),
+                    t("output.open_failed_message", path=resolved),
+                )
         except Exception as exc:
-            QMessageBox.critical(self, "输出目录不可用", str(exc))
+            QMessageBox.critical(self, t("output.unavailable_title"), str(exc))
 
 
 class CamerasPage(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, i18n: LanguageManager, parent=None):
         super().__init__(parent)
+        self.i18n = i18n
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 22, 24, 24)
         layout.setSpacing(16)
-        layout.addLayout(_page_header("CameraRSI 映射", "CameraRSI ID 与输出名称必须唯一，非法 Windows 文件名会在启动前拒绝。"))
-        group = QGroupBox("Camera ID → 名称")
-        gl = QVBoxLayout(group); gl.setSpacing(12)
+        header, self.page_title, self.page_subtitle = _page_header()
+        layout.addLayout(header)
+        self.mapping_group = QGroupBox()
+        group_layout = QVBoxLayout(self.mapping_group)
+        group_layout.setSpacing(12)
         self.table = QTableWidget(0, 2)
-        self.table.setHorizontalHeaderLabels(["CameraRSI ID", "显示 / 输出名称"])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.horizontalHeader().setMinimumSectionSize(140)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setMinimumHeight(300)
-        buttons = QHBoxLayout(); buttons.setSpacing(8)
-        self.add_button = QPushButton("新增映射")
-        self.remove_button = QPushButton("删除选中")
-        self.restore_button = QPushButton("恢复六路默认值")
-        for b in [self.add_button, self.remove_button, self.restore_button]: buttons.addWidget(b)
+        buttons = QHBoxLayout()
+        buttons.setSpacing(8)
+        self.add_button = QPushButton()
+        self.remove_button = QPushButton()
+        self.restore_button = QPushButton()
+        for button in [self.add_button, self.remove_button, self.restore_button]:
+            buttons.addWidget(button)
         buttons.addStretch(1)
-        gl.addWidget(self.table, 1); gl.addLayout(buttons)
-        layout.addWidget(group, 1)
+        group_layout.addWidget(self.table, 1)
+        group_layout.addLayout(buttons)
+        layout.addWidget(self.mapping_group, 1)
+
         self.add_button.clicked.connect(self.add_row)
         self.remove_button.clicked.connect(self.remove_selected)
         self.restore_button.clicked.connect(self.restore_defaults)
+        self.retranslate_ui()
+
+    def retranslate_ui(self) -> None:
+        t = self.i18n.text
+        self.page_title.setText(t("cameras.title"))
+        self.page_subtitle.setText(t("cameras.subtitle"))
+        self.mapping_group.setTitle(t("cameras.group"))
+        self.table.setHorizontalHeaderLabels(
+            [t("cameras.id_header"), t("cameras.name_header")]
+        )
+        self.add_button.setText(t("cameras.add"))
+        self.remove_button.setText(t("cameras.remove"))
+        self.restore_button.setText(t("cameras.restore"))
 
     def set_mapping(self, mapping: dict) -> None:
         self.table.setRowCount(0)
-        for cam_id, name in sorted(mapping.items(), key=lambda x: int(x[0])):
+        for cam_id, name in sorted(mapping.items(), key=lambda item: int(item[0])):
             self.add_row(str(cam_id), str(name))
 
     def add_row(self, cam_id: str | None = None, name: str | None = None) -> None:
-        row = self.table.rowCount(); self.table.insertRow(row)
+        row = self.table.rowCount()
+        self.table.insertRow(row)
         if cam_id is None:
-            existing = {int(self.table.item(r, 0).text()) for r in range(row) if self.table.item(r, 0) and self.table.item(r, 0).text().isdigit()}
+            existing = {
+                int(self.table.item(index, 0).text())
+                for index in range(row)
+                if self.table.item(index, 0)
+                and self.table.item(index, 0).text().isdigit()
+            }
             next_id = 0
-            while next_id in existing: next_id += 1
+            while next_id in existing:
+                next_id += 1
             cam_id = str(next_id)
         self.table.setItem(row, 0, QTableWidgetItem(str(cam_id)))
         self.table.setItem(row, 1, QTableWidgetItem(name or f"CAM_{cam_id}"))
         self.table.resizeRowToContents(row)
 
     def remove_selected(self) -> None:
-        for row in sorted({idx.row() for idx in self.table.selectedIndexes()}, reverse=True):
+        for row in sorted(
+            {index.row() for index in self.table.selectedIndexes()}, reverse=True
+        ):
             self.table.removeRow(row)
 
     def restore_defaults(self) -> None:
-        self.set_mapping({"0": "FRONT", "1": "FRONT_LEFT", "2": "FRONT_RIGHT", "3": "BACK_LEFT", "4": "BACK_RIGHT", "5": "BACK"})
+        self.set_mapping(
+            {
+                "0": "FRONT",
+                "1": "FRONT_LEFT",
+                "2": "FRONT_RIGHT",
+                "3": "BACK_LEFT",
+                "4": "BACK_RIGHT",
+                "5": "BACK",
+            }
+        )
 
 
 class AdvancedPage(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, i18n: LanguageManager, parent=None):
         super().__init__(parent)
+        self.i18n = i18n
+        self.form_labels: dict[str, QLabel] = {}
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 22, 24, 24)
         layout.setSpacing(16)
-        layout.addLayout(_page_header("高级设置", "这些参数控制网络、缓冲、媒体写入和运行日志。"))
+        header, self.page_title, self.page_subtitle = _page_header()
+        layout.addLayout(header)
 
-        network = QGroupBox("RSDS / 网络")
-        nf = QFormLayout(network); _configure_form(nf)
-        self.socket_timeout = QDoubleSpinBox(); self.socket_timeout.setRange(0.1, 120); self.socket_timeout.setValue(3.0); self.socket_timeout.setSuffix(" s")
-        self.connect_timeout = QDoubleSpinBox(); self.connect_timeout.setRange(0.1, 120); self.connect_timeout.setValue(2.0); self.connect_timeout.setSuffix(" s")
-        self.max_timeouts = QSpinBox(); self.max_timeouts.setRange(1, 100); self.max_timeouts.setValue(1)
-        self.reconnect_delay = QDoubleSpinBox(); self.reconnect_delay.setRange(0, 60); self.reconnect_delay.setValue(0.5); self.reconnect_delay.setSuffix(" s")
-        self.header_size = QSpinBox(); self.header_size.setRange(1, 4096); self.header_size.setValue(64); self.header_size.setSuffix(" bytes")
-        self.max_payload_mb = QSpinBox(); self.max_payload_mb.setRange(1, 2048); self.max_payload_mb.setValue(256); self.max_payload_mb.setSuffix(" MiB")
-        nf.addRow("Socket 超时", self.socket_timeout); nf.addRow("连接超时", self.connect_timeout); nf.addRow("超时后重连阈值", self.max_timeouts); nf.addRow("重连间隔", self.reconnect_delay); nf.addRow("RSDS Header", self.header_size); nf.addRow("单消息最大 Payload", self.max_payload_mb)
+        self.network_group = QGroupBox()
+        network_form = QFormLayout(self.network_group)
+        _configure_form(network_form)
+        self.socket_timeout = QDoubleSpinBox()
+        self.socket_timeout.setRange(0.1, 120)
+        self.socket_timeout.setValue(3.0)
+        self.socket_timeout.setSuffix(" s")
+        self.connect_timeout = QDoubleSpinBox()
+        self.connect_timeout.setRange(0.1, 120)
+        self.connect_timeout.setValue(2.0)
+        self.connect_timeout.setSuffix(" s")
+        self.max_timeouts = QSpinBox()
+        self.max_timeouts.setRange(1, 100)
+        self.max_timeouts.setValue(1)
+        self.reconnect_delay = QDoubleSpinBox()
+        self.reconnect_delay.setRange(0, 60)
+        self.reconnect_delay.setValue(0.5)
+        self.reconnect_delay.setSuffix(" s")
+        self.header_size = QSpinBox()
+        self.header_size.setRange(1, 4096)
+        self.header_size.setValue(64)
+        self.header_size.setSuffix(" bytes")
+        self.max_payload_mb = QSpinBox()
+        self.max_payload_mb.setRange(1, 2048)
+        self.max_payload_mb.setValue(256)
+        self.max_payload_mb.setSuffix(" MiB")
+        self._add_advanced_row(
+            network_form, "advanced.socket_timeout", self.socket_timeout
+        )
+        self._add_advanced_row(
+            network_form, "advanced.connect_timeout", self.connect_timeout
+        )
+        self._add_advanced_row(
+            network_form, "advanced.timeout_threshold", self.max_timeouts
+        )
+        self._add_advanced_row(
+            network_form, "advanced.reconnect_delay", self.reconnect_delay
+        )
+        self._add_advanced_row(network_form, "advanced.header_size", self.header_size)
+        self._add_advanced_row(
+            network_form, "advanced.max_payload", self.max_payload_mb
+        )
 
-        reliability = QGroupBox("可靠性 / 缓冲")
-        rf = QFormLayout(reliability); _configure_form(rf)
-        self.message_capacity = QSpinBox(); self.message_capacity.setRange(2, 100000); self.message_capacity.setValue(512)
-        self.frame_capacity = QSpinBox(); self.frame_capacity.setRange(2, 100000); self.frame_capacity.setValue(180)
-        self.image_capacity = QSpinBox(); self.image_capacity.setRange(2, 100000); self.image_capacity.setValue(512)
-        self.writer_failure_policy = QComboBox(); self.writer_failure_policy.addItems(["stop", "degraded"])
-        self.min_free_disk_gb = QDoubleSpinBox(); self.min_free_disk_gb.setRange(0, 10000); self.min_free_disk_gb.setValue(2.0); self.min_free_disk_gb.setSuffix(" GiB")
-        self.disk_check_interval = QDoubleSpinBox(); self.disk_check_interval.setRange(0.5, 300); self.disk_check_interval.setValue(5.0); self.disk_check_interval.setSuffix(" s")
-        self.sim_reset_threshold = QDoubleSpinBox(); self.sim_reset_threshold.setRange(0.01, 60); self.sim_reset_threshold.setDecimals(2); self.sim_reset_threshold.setValue(0.5); self.sim_reset_threshold.setSuffix(" s")
-        self.mark_degraded_on_drop = QCheckBox("任意 RingBuffer 丢弃数据时标记 DEGRADED"); self.mark_degraded_on_drop.setChecked(True)
-        rf.addRow("消息环形缓冲", self.message_capacity); rf.addRow("每路视频帧缓冲", self.frame_capacity); rf.addRow("每路图片任务缓冲", self.image_capacity)
-        rf.addRow("Writer 失败策略", self.writer_failure_policy); rf.addRow("最小磁盘余量", self.min_free_disk_gb); rf.addRow("磁盘检查间隔", self.disk_check_interval); rf.addRow("SimTime 回退阈值", self.sim_reset_threshold); rf.addRow("丢帧状态", self.mark_degraded_on_drop)
+        self.reliability_group = QGroupBox()
+        reliability_form = QFormLayout(self.reliability_group)
+        _configure_form(reliability_form)
+        self.message_capacity = QSpinBox()
+        self.message_capacity.setRange(2, 100000)
+        self.message_capacity.setValue(512)
+        self.frame_capacity = QSpinBox()
+        self.frame_capacity.setRange(2, 100000)
+        self.frame_capacity.setValue(180)
+        self.image_capacity = QSpinBox()
+        self.image_capacity.setRange(2, 100000)
+        self.image_capacity.setValue(512)
+        self.writer_failure_policy = QComboBox()
+        self.writer_failure_policy.addItem("", "stop")
+        self.writer_failure_policy.addItem("", "degraded")
+        self.min_free_disk_gb = QDoubleSpinBox()
+        self.min_free_disk_gb.setRange(0, 10000)
+        self.min_free_disk_gb.setValue(2.0)
+        self.min_free_disk_gb.setSuffix(" GiB")
+        self.disk_check_interval = QDoubleSpinBox()
+        self.disk_check_interval.setRange(0.5, 300)
+        self.disk_check_interval.setValue(5.0)
+        self.disk_check_interval.setSuffix(" s")
+        self.sim_reset_threshold = QDoubleSpinBox()
+        self.sim_reset_threshold.setRange(0.01, 60)
+        self.sim_reset_threshold.setDecimals(2)
+        self.sim_reset_threshold.setValue(0.5)
+        self.sim_reset_threshold.setSuffix(" s")
+        self.mark_degraded_on_drop = QCheckBox()
+        self.mark_degraded_on_drop.setChecked(True)
+        self._add_advanced_row(
+            reliability_form, "advanced.message_buffer", self.message_capacity
+        )
+        self._add_advanced_row(
+            reliability_form, "advanced.video_buffer", self.frame_capacity
+        )
+        self._add_advanced_row(
+            reliability_form, "advanced.image_buffer", self.image_capacity
+        )
+        self._add_advanced_row(
+            reliability_form, "advanced.writer_policy", self.writer_failure_policy
+        )
+        self._add_advanced_row(
+            reliability_form, "advanced.min_disk", self.min_free_disk_gb
+        )
+        self._add_advanced_row(
+            reliability_form, "advanced.disk_interval", self.disk_check_interval
+        )
+        self._add_advanced_row(
+            reliability_form, "advanced.sim_reset", self.sim_reset_threshold
+        )
+        self._add_advanced_row(
+            reliability_form, "advanced.drop_state", self.mark_degraded_on_drop
+        )
 
-        media = QGroupBox("视频 / 图像")
-        mf = QFormLayout(media); _configure_form(mf)
-        self.fourcc = QLineEdit("XVID"); self.fourcc.setMaxLength(4)
+        self.media_group = QGroupBox()
+        media_form = QFormLayout(self.media_group)
+        _configure_form(media_form)
+        self.fourcc = QLineEdit("XVID")
+        self.fourcc.setMaxLength(4)
         self.video_extension = QLineEdit("avi")
-        self.max_gap_fill_frames = QSpinBox(); self.max_gap_fill_frames.setRange(0, 100000); self.max_gap_fill_frames.setValue(60)
-        self.preview_hz = QDoubleSpinBox(); self.preview_hz.setRange(0.2, 15.0); self.preview_hz.setDecimals(1); self.preview_hz.setValue(2.0); self.preview_hz.setSuffix(" Hz")
-        mf.addRow("Video FOURCC", self.fourcc); mf.addRow("视频扩展名", self.video_extension); mf.addRow("最大补帧数", self.max_gap_fill_frames); mf.addRow("GUI 预览频率", self.preview_hz)
-        mf.addRow("", _hint("分辨率变化或视频时间大跳变会自动切换到新的 partXXX 视频段，避免无上限补帧。"))
+        self.max_gap_fill_frames = QSpinBox()
+        self.max_gap_fill_frames.setRange(0, 100000)
+        self.max_gap_fill_frames.setValue(60)
+        self.preview_hz = QDoubleSpinBox()
+        self.preview_hz.setRange(0.2, 15.0)
+        self.preview_hz.setDecimals(1)
+        self.preview_hz.setValue(2.0)
+        self.preview_hz.setSuffix(" Hz")
+        self._add_advanced_row(media_form, "advanced.fourcc", self.fourcc)
+        self._add_advanced_row(
+            media_form, "advanced.video_extension", self.video_extension
+        )
+        self._add_advanced_row(
+            media_form, "advanced.max_gap_fill", self.max_gap_fill_frames
+        )
+        self._add_advanced_row(media_form, "advanced.preview_rate", self.preview_hz)
+        self.media_hint = _hint()
+        media_form.addRow("", self.media_hint)
 
-        logs = QGroupBox("持久日志")
-        lf = QFormLayout(logs); _configure_form(lf)
-        self.log_level = QComboBox(); self.log_level.addItems(["DEBUG", "INFO", "WARNING", "ERROR"]); self.log_level.setCurrentText("INFO")
-        self.log_max_mb = QSpinBox(); self.log_max_mb.setRange(1, 1024); self.log_max_mb.setValue(10); self.log_max_mb.setSuffix(" MB")
-        self.log_backups = QSpinBox(); self.log_backups.setRange(1, 50); self.log_backups.setValue(5)
-        lf.addRow("日志级别", self.log_level); lf.addRow("单文件上限", self.log_max_mb); lf.addRow("保留滚动文件", self.log_backups)
+        self.logs_group = QGroupBox()
+        logs_form = QFormLayout(self.logs_group)
+        _configure_form(logs_form)
+        self.log_level = QComboBox()
+        self.log_level.addItems(["DEBUG", "INFO", "WARNING", "ERROR"])
+        self.log_level.setCurrentText("INFO")
+        self.log_max_mb = QSpinBox()
+        self.log_max_mb.setRange(1, 1024)
+        self.log_max_mb.setValue(10)
+        self.log_max_mb.setSuffix(" MB")
+        self.log_backups = QSpinBox()
+        self.log_backups.setRange(1, 50)
+        self.log_backups.setValue(5)
+        self._add_advanced_row(logs_form, "advanced.log_level", self.log_level)
+        self._add_advanced_row(logs_form, "advanced.log_size", self.log_max_mb)
+        self._add_advanced_row(logs_form, "advanced.log_backups", self.log_backups)
 
-        for group in [network, reliability, media, logs]:
+        for group in [
+            self.network_group,
+            self.reliability_group,
+            self.media_group,
+            self.logs_group,
+        ]:
             layout.addWidget(group)
         layout.addStretch(1)
+        self.retranslate_ui()
+
+    def _add_advanced_row(self, form: QFormLayout, key: str, field) -> None:
+        self.form_labels[key] = _add_form_row(form, field)
+
+    def retranslate_ui(self) -> None:
+        t = self.i18n.text
+        self.page_title.setText(t("advanced.title"))
+        self.page_subtitle.setText(t("advanced.subtitle"))
+        self.network_group.setTitle(t("advanced.network_group"))
+        self.reliability_group.setTitle(t("advanced.reliability_group"))
+        self.media_group.setTitle(t("advanced.media_group"))
+        self.logs_group.setTitle(t("advanced.logs_group"))
+        for key, label in self.form_labels.items():
+            label.setText(t(key))
+        self.mark_degraded_on_drop.setText(t("advanced.mark_degraded"))
+        self.media_hint.setText(t("advanced.media_hint"))
+        current_policy = self.writer_failure_policy.currentData()
+        self.writer_failure_policy.setItemText(0, t("advanced.policy_stop"))
+        self.writer_failure_policy.setItemText(1, t("advanced.policy_degraded"))
+        policy_index = self.writer_failure_policy.findData(current_policy)
+        if policy_index >= 0:
+            self.writer_failure_policy.setCurrentIndex(policy_index)
 
 
 class LogsPage(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, i18n: LanguageManager, parent=None):
         super().__init__(parent)
+        self.i18n = i18n
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 22, 24, 24)
         layout.setSpacing(12)
-        layout.addLayout(_page_header("运行日志", "GUI 日志用于查看；完整运行日志会自动滚动写入输出根目录 logs/recorder.log。"))
-        toolbar = QHBoxLayout(); toolbar.setSpacing(8)
-        self.clear_button = QPushButton("清空"); self.export_button = QPushButton("导出日志…"); self.auto_scroll = QCheckBox("自动滚动"); self.auto_scroll.setChecked(True)
-        toolbar.addWidget(self.clear_button); toolbar.addWidget(self.export_button); toolbar.addWidget(self.auto_scroll); toolbar.addStretch(1)
+        header, self.page_title, self.page_subtitle = _page_header()
+        layout.addLayout(header)
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(8)
+        self.clear_button = QPushButton()
+        self.export_button = QPushButton()
+        self.auto_scroll = QCheckBox()
+        self.auto_scroll.setChecked(True)
+        toolbar.addWidget(self.clear_button)
+        toolbar.addWidget(self.export_button)
+        toolbar.addWidget(self.auto_scroll)
+        toolbar.addStretch(1)
         layout.addLayout(toolbar)
-        from PySide6.QtWidgets import QPlainTextEdit
-        self.text = QPlainTextEdit(); self.text.setReadOnly(True); self.text.setMaximumBlockCount(10000)
-        self.text.setStyleSheet('font-family: "Cascadia Mono", "Consolas", monospace; font-size: 13px; line-height: 1.35;')
+        self.text = QPlainTextEdit()
+        self.text.setReadOnly(True)
+        self.text.setMaximumBlockCount(10000)
+        self.text.setStyleSheet(
+            'font-family: "Cascadia Mono", "Consolas", monospace; font-size: 13px; line-height: 1.35;'
+        )
         layout.addWidget(self.text, 1)
         self.clear_button.clicked.connect(self.text.clear)
         self.export_button.clicked.connect(self.export_log)
+        self.retranslate_ui()
+
+    def retranslate_ui(self) -> None:
+        t = self.i18n.text
+        self.page_title.setText(t("logs.title"))
+        self.page_subtitle.setText(t("logs.subtitle"))
+        self.clear_button.setText(t("logs.clear"))
+        self.export_button.setText(t("logs.export"))
+        self.auto_scroll.setText(t("logs.auto_scroll"))
 
     def append(self, message: str) -> None:
         self.text.appendPlainText(message)
         if self.auto_scroll.isChecked():
-            bar = self.text.verticalScrollBar(); bar.setValue(bar.maximum())
+            bar = self.text.verticalScrollBar()
+            bar.setValue(bar.maximum())
 
     def export_log(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "导出运行日志", "carmaker_recorder.log", "Log (*.log);;Text (*.txt)")
-        if not path: return
+        t = self.i18n.text
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            t("logs.export_title"),
+            "carmaker_recorder.log",
+            t("logs.export_filter"),
+        )
+        if not path:
+            return
         try:
             Path(path).write_text(self.text.toPlainText(), encoding="utf-8")
         except Exception as exc:
-            QMessageBox.critical(self, "日志导出失败", str(exc))
+            QMessageBox.critical(self, t("logs.export_failed"), str(exc))

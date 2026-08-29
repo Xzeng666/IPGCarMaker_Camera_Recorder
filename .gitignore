@@ -43,6 +43,8 @@
 /images/*
 !/images/Example of Six-Channel CameraRSI Demo Map.jpg
 !/images/Example of Six-Channel CameraRSI.jpg
+!/images/gui-overview-en.png
+!/images/gui-overview-zh.png
 !/docs/
 /docs/*
 !/docs/ARCHITECTURE.md
