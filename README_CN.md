@@ -14,6 +14,8 @@ CarMaker CameraRSI Recorder 通过 CarMaker / MovieNX 的 RSDS TCP 数据流采�
 
 - 同时连接一个或多个 RSDS 端口，各端口独立重连
 - 按 CameraRSI ID 保存多路视频和采样图片
+- 在可用时通过 FFmpeg 使用 NVENC、Intel QSV 或 AMD AMF，并支持配置 OpenCV 回退
+- 避免录制链路中重复复制 RSDS Payload 和原生 BGR 帧
 - 根据 CameraRSI 仿真时间采样静态图片
 - 记录队列丢帧、写入状态、吞吐率和磁盘余量
 - 视频分辨率或时间跨度变化时自动分段
@@ -31,6 +33,7 @@ CarMaker CameraRSI Recorder 通过 CarMaker / MovieNX 的 RSDS TCP 数据流采�
 - 已配置 CameraRSI 输出的 CarMaker / MovieNX
 - 命令行模式：NumPy、OpenCV
 - 图形界面：额外需要 PySide6
+- 可选硬件视频编码：`PATH` 中可找到 FFmpeg，并配有受支持的 GPU 和当前驱动
 
 ## 快速开始
 
@@ -84,12 +87,30 @@ python run.py --config config.json
 默认配置位于 `config.json`。主要配置项包括：
 
 - `network.host`、`network.ports`：RSDS 地址与端口
-- `video`、`images`：视频与图片输出策略
+- `video`、`images`：媒体输出策略、编码器选择、编码格式和码率
 - `output.save_root`：采集结果目录
 - `output.camera_names`：CameraRSI ID 与输出名称映射
 - `reliability`：磁盘阈值、写入失败策略和仿真时间回退阈值
 
-配置使用严格的 schema v4；缺失字段、未知字段和旧版字段都会被拒绝。完整字段说明见 [配置参考](docs/CONFIG_REFERENCE.md)。远程多摄像头示例见 [示例配置](examples/config_remote_multi_camera.json)。
+配置使用严格的 schema v5；缺失字段、未知字段和旧版字段都会被拒绝。完整字段说明见 [配置参考](docs/CONFIG_REFERENCE.md)。远程多摄像头示例见 [示例配置](examples/config_remote_multi_camera.json)。
+
+### 硬件视频编码
+
+默认的 `video.backend` 为 `auto`。首个视频分段创建时，程序会通过 FFmpeg 依次测试所选编码格式对应的 NVENC、Intel QSV 和 AMD AMF，使用第一个实际可工作的硬件编码器。如果 FFmpeg 或兼容编码器不可用，且 `allow_cpu_fallback` 已启用，录制会继续使用 OpenCV。
+
+```json
+"video": {
+  "backend": "auto",
+  "codec": "h264",
+  "bitrate_mbps": 12.0,
+  "allow_cpu_fallback": true,
+  "ffmpeg_path": "ffmpeg"
+}
+```
+
+纯 CPU 部署可使用 `backend: "opencv"`；也可以选择 `nvenc`、`qsv` 或 `amf` 指定硬件类型。当录制必须使用硬件编码时，将 `allow_cpu_fallback` 设为 `false`。`fourcc` 只用于 OpenCV 路径。每路摄像头最终使用的编码后端会写入 `session_manifest.json`。
+
+RSDS 数据仍需先进入主机内存，编码后的数据也仍需经过操作系统写入磁盘。硬件模式加速的是视频编码，不代表端到端零复制；本版本的 RGB、灰度、JPEG 和预览转换仍使用 CPU。
 
 ## 输出目录
 

@@ -13,6 +13,13 @@ from carmaker_recorder.image_codec import (
 
 
 class ImageCodecMatrixTests(unittest.TestCase):
+    def test_bgr_decode_reuses_payload_memory(self):
+        payload = bytearray([1, 2, 3, 4, 5, 6])
+        frame = decode_payload_to_bgr(payload, "bgr", 2, 1)
+        self.assertIsNotNone(frame)
+        self.assertTrue(np.shares_memory(frame, np.frombuffer(payload, dtype=np.uint8)))
+        self.assertFalse(frame.flags.writeable)
+
     def test_auto_format_matrix_and_headers(self):
         self.assertEqual(choose_export_format("auto", "rgb", 6, 2, 1), "ppm")
         self.assertEqual(choose_export_format("auto", "bgr", 6, 2, 1), "ppm")

@@ -77,6 +77,11 @@ def collect_from_window(window) -> AppConfig:
         "video": {
             "enabled": window.connection_page.video_enabled.isChecked(),
             "fps": window.connection_page.video_fps.value(),
+            "backend": window.advanced_page.video_backend.currentData(),
+            "codec": window.advanced_page.video_codec.currentData(),
+            "bitrate_mbps": window.advanced_page.video_bitrate.value(),
+            "allow_cpu_fallback": window.advanced_page.allow_cpu_fallback.isChecked(),
+            "ffmpeg_path": window.advanced_page.ffmpeg_path.text().strip(),
             "fourcc": window.advanced_page.fourcc.text().strip().upper(),
             "extension": window.advanced_page.video_extension.text()
             .strip()
@@ -149,6 +154,15 @@ def apply_to_window(window, config: AppConfig) -> None:
         max(1, int(round(net["max_payload_bytes"] / (1024 * 1024))))
     )
     adv.fourcc.setText(video["fourcc"])
+    backend_index = adv.video_backend.findData(video["backend"])
+    if backend_index >= 0:
+        adv.video_backend.setCurrentIndex(backend_index)
+    codec_index = adv.video_codec.findData(video["codec"])
+    if codec_index >= 0:
+        adv.video_codec.setCurrentIndex(codec_index)
+    adv.video_bitrate.setValue(float(video["bitrate_mbps"]))
+    adv.allow_cpu_fallback.setChecked(bool(video["allow_cpu_fallback"]))
+    adv.ffmpeg_path.setText(video["ffmpeg_path"])
     adv.video_extension.setText(video["extension"])
     adv.max_gap_fill_frames.setValue(int(video["max_gap_fill_frames"]))
     reliability = raw["reliability"]

@@ -7,8 +7,8 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, List
 
-SCHEMA_VERSION = 4
-TOOL_VERSION = "1.4.0"
+SCHEMA_VERSION = 5
+TOOL_VERSION = "1.5.0"
 
 _WINDOWS_RESERVED_NAMES = {
     "CON", "PRN", "AUX", "NUL",
@@ -53,6 +53,11 @@ class BufferConfig:
 class VideoConfig:
     enabled: bool = True
     fps: float = 30.0
+    backend: str = "auto"
+    codec: str = "h264"
+    bitrate_mbps: float = 12.0
+    allow_cpu_fallback: bool = True
+    ffmpeg_path: str = "ffmpeg"
     fourcc: str = "XVID"
     extension: str = "avi"
     max_gap_fill_frames: int = 60
@@ -215,6 +220,14 @@ def config_from_dict(raw: Dict[str, Any]) -> AppConfig:
 
     if not video.enabled and not images.enabled:
         raise ValueError("at least one of video/images must be enabled")
+    if video.backend not in {"auto", "opencv", "nvenc", "qsv", "amf"}:
+        raise ValueError("video.backend must be auto/opencv/nvenc/qsv/amf")
+    if video.codec not in {"h264", "hevc", "av1"}:
+        raise ValueError("video.codec must be h264/hevc/av1")
+    if video.bitrate_mbps <= 0:
+        raise ValueError("video.bitrate_mbps must be > 0")
+    if not video.ffmpeg_path.strip():
+        raise ValueError("video.ffmpeg_path must not be empty")
     if len(video.fourcc) != 4:
         raise ValueError("video.fourcc must contain exactly 4 characters")
     if video.fps <= 0:

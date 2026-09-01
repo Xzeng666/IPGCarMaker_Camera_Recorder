@@ -612,6 +612,24 @@ class AdvancedPage(QWidget):
         self.media_group = QGroupBox()
         media_form = QFormLayout(self.media_group)
         _configure_form(media_form)
+        self.video_backend = QComboBox()
+        self.video_backend.addItem("", "auto")
+        self.video_backend.addItem("", "opencv")
+        self.video_backend.addItem("", "nvenc")
+        self.video_backend.addItem("", "qsv")
+        self.video_backend.addItem("", "amf")
+        self.video_codec = QComboBox()
+        self.video_codec.addItem("H.264", "h264")
+        self.video_codec.addItem("H.265 / HEVC", "hevc")
+        self.video_codec.addItem("AV1", "av1")
+        self.video_bitrate = QDoubleSpinBox()
+        self.video_bitrate.setRange(0.1, 1000.0)
+        self.video_bitrate.setDecimals(1)
+        self.video_bitrate.setValue(12.0)
+        self.video_bitrate.setSuffix(" Mbps")
+        self.allow_cpu_fallback = QCheckBox()
+        self.allow_cpu_fallback.setChecked(True)
+        self.ffmpeg_path = QLineEdit("ffmpeg")
         self.fourcc = QLineEdit("XVID")
         self.fourcc.setMaxLength(4)
         self.video_extension = QLineEdit("avi")
@@ -623,6 +641,17 @@ class AdvancedPage(QWidget):
         self.preview_hz.setDecimals(1)
         self.preview_hz.setValue(2.0)
         self.preview_hz.setSuffix(" Hz")
+        self._add_advanced_row(
+            media_form, "advanced.video_backend", self.video_backend
+        )
+        self._add_advanced_row(media_form, "advanced.video_codec", self.video_codec)
+        self._add_advanced_row(
+            media_form, "advanced.video_bitrate", self.video_bitrate
+        )
+        self._add_advanced_row(media_form, "advanced.ffmpeg_path", self.ffmpeg_path)
+        self._add_advanced_row(
+            media_form, "advanced.cpu_fallback", self.allow_cpu_fallback
+        )
         self._add_advanced_row(media_form, "advanced.fourcc", self.fourcc)
         self._add_advanced_row(
             media_form, "advanced.video_extension", self.video_extension
@@ -633,6 +662,10 @@ class AdvancedPage(QWidget):
         self._add_advanced_row(media_form, "advanced.preview_rate", self.preview_hz)
         self.media_hint = _hint()
         media_form.addRow("", self.media_hint)
+        self.video_backend.currentIndexChanged.connect(
+            lambda _index: self._sync_video_backend_fields()
+        )
+        self._sync_video_backend_fields()
 
         self.logs_group = QGroupBox()
         logs_form = QFormLayout(self.logs_group)
@@ -664,6 +697,16 @@ class AdvancedPage(QWidget):
     def _add_advanced_row(self, form: QFormLayout, key: str, field) -> None:
         self.form_labels[key] = _add_form_row(form, field)
 
+    def _sync_video_backend_fields(self) -> None:
+        hardware_enabled = self.video_backend.currentData() != "opencv"
+        for field in (
+            self.video_codec,
+            self.video_bitrate,
+            self.ffmpeg_path,
+            self.allow_cpu_fallback,
+        ):
+            field.setEnabled(hardware_enabled)
+
     def retranslate_ui(self) -> None:
         t = self.i18n.text
         self.page_title.setText(t("advanced.title"))
@@ -676,6 +719,16 @@ class AdvancedPage(QWidget):
             label.setText(t(key))
         self.mark_degraded_on_drop.setText(t("advanced.mark_degraded"))
         self.media_hint.setText(t("advanced.media_hint"))
+        current_backend = self.video_backend.currentData()
+        self.video_backend.setItemText(0, t("advanced.backend_auto"))
+        self.video_backend.setItemText(1, t("advanced.backend_opencv"))
+        self.video_backend.setItemText(2, "NVIDIA NVENC")
+        self.video_backend.setItemText(3, "Intel QSV")
+        self.video_backend.setItemText(4, "AMD AMF")
+        backend_index = self.video_backend.findData(current_backend)
+        if backend_index >= 0:
+            self.video_backend.setCurrentIndex(backend_index)
+        self.allow_cpu_fallback.setText(t("advanced.allow_cpu_fallback"))
         current_policy = self.writer_failure_policy.currentData()
         self.writer_failure_policy.setItemText(0, t("advanced.policy_stop"))
         self.writer_failure_policy.setItemText(1, t("advanced.policy_degraded"))

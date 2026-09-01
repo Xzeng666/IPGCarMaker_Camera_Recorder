@@ -1,6 +1,6 @@
 # Configuration Reference
 
-`config.json` uses strict `schema_version: 4`. Missing keys, unknown keys and old keys are rejected.
+`config.json` uses strict `schema_version: 5`. Missing keys, unknown keys and old keys are rejected.
 
 ## network
 
@@ -25,9 +25,16 @@ Queue full policy is overwrite-oldest + explicit dropped telemetry.
 
 - `enabled`
 - `fps`
-- `fourcc`
+- `backend`: `auto|opencv|nvenc|qsv|amf`. `auto` probes hardware encoders in that order and uses the first working option.
+- `codec`: `h264|hevc|av1` for the FFmpeg hardware path.
+- `bitrate_mbps`: target bitrate for the FFmpeg hardware path.
+- `allow_cpu_fallback`: use OpenCV when the configured hardware path is unavailable.
+- `ffmpeg_path`: executable name or file path used for hardware probing and encoding.
+- `fourcc`: four-character codec used only by the OpenCV path.
 - `extension`
 - `max_gap_fill_frames`: gap larger than this starts a new segment.
+
+Hardware availability is verified with a short FFmpeg encoder probe, rather than inferred from an encoder name alone. The selected backend is recorded per camera in the session manifest. FFmpeg receives BGR frames through a raw-video pipe, so hardware mode offloads encoding but still includes one host-memory transfer into FFmpeg.
 
 ## images
 

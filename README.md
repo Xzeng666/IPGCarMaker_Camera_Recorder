@@ -14,6 +14,8 @@ CarMaker CameraRSI Recorder captures multiple `CameraRSI` streams from CarMaker 
 
 - Connects to one or more RSDS ports with independent reconnection
 - Records multiple cameras by CameraRSI ID
+- Uses NVENC, Intel QSV, or AMD AMF through FFmpeg when available, with a configurable OpenCV fallback
+- Avoids redundant RSDS payload and native BGR frame copies in the recording pipeline
 - Samples still images on CameraRSI simulation time
 - Reports queue drops, writer health, throughput, and free disk space
 - Starts a new video segment after resolution changes or large time gaps
@@ -31,6 +33,7 @@ CarMaker CameraRSI Recorder captures multiple `CameraRSI` streams from CarMaker 
 - CarMaker or MovieNX configured to publish CameraRSI data
 - CLI: NumPy and OpenCV
 - GUI: PySide6 in addition to the core dependencies
+- Optional hardware video encoding: FFmpeg available on `PATH`, plus a supported GPU and current driver
 
 ## Quick start
 
@@ -84,12 +87,30 @@ python run.py --config config.json
 The default configuration is stored in `config.json`. Important sections include:
 
 - `network.host` and `network.ports`: RSDS endpoint
-- `video` and `images`: media output policy
+- `video` and `images`: media output policy, encoder selection, codec, and bitrate
 - `output.save_root`: capture output directory
 - `output.camera_names`: CameraRSI ID-to-name mapping
 - `reliability`: disk thresholds, writer failure policy, and simulation-time rollback threshold
 
-Configuration parsing follows strict schema v4 rules. Missing, unknown, and legacy fields are rejected. See the [configuration reference](docs/CONFIG_REFERENCE.md) for every field and the [multi-camera example](examples/config_remote_multi_camera.json) for a remote setup.
+Configuration parsing follows strict schema v5 rules. Missing, unknown, and legacy fields are rejected. See the [configuration reference](docs/CONFIG_REFERENCE.md) for every field and the [multi-camera example](examples/config_remote_multi_camera.json) for a remote setup.
+
+### Hardware video encoding
+
+The default `video.backend` is `auto`. At the first video segment, the recorder asks FFmpeg to test the requested codec with NVENC, Intel QSV, and AMD AMF. The first working hardware encoder is selected. If FFmpeg or a compatible encoder is unavailable, recording continues through OpenCV when `allow_cpu_fallback` is enabled.
+
+```json
+"video": {
+  "backend": "auto",
+  "codec": "h264",
+  "bitrate_mbps": 12.0,
+  "allow_cpu_fallback": true,
+  "ffmpeg_path": "ffmpeg"
+}
+```
+
+Use `backend: "opencv"` for a CPU-only deployment, or select `nvenc`, `qsv`, or `amf` to require a preferred hardware family. Set `allow_cpu_fallback` to `false` when capture must fail instead of switching to CPU encoding. `fourcc` is used only by the OpenCV path. The actual backend selected for each camera is written to `session_manifest.json`.
+
+RSDS data still arrives in host memory, and encoded packets still pass through the operating system before reaching storage. Hardware mode accelerates video encoding; it does not claim end-to-end zero-copy operation. RGB, grayscale, JPEG, and preview conversion remain CPU-based in this release.
 
 ## Output layout
 

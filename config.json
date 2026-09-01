@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "network": {
     "host": "localhost",
     "ports": [
@@ -20,6 +20,11 @@
   "video": {
     "enabled": true,
     "fps": 30.0,
+    "backend": "auto",
+    "codec": "h264",
+    "bitrate_mbps": 12.0,
+    "allow_cpu_fallback": true,
+    "ffmpeg_path": "ffmpeg",
     "fourcc": "XVID",
     "extension": "avi",
     "max_gap_fill_frames": 60

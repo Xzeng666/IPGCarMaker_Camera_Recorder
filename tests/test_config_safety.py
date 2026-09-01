@@ -26,6 +26,18 @@ class ConfigSafetyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             config_from_dict(raw)
 
+    def test_video_acceleration_settings_are_validated(self):
+        for field, value in (
+            ("backend", "cuda"),
+            ("codec", "vp9"),
+            ("bitrate_mbps", 0),
+            ("ffmpeg_path", ""),
+        ):
+            with self.subTest(field=field):
+                raw = latest_config_dict(video={field: value})
+                with self.assertRaises(ValueError):
+                    config_from_dict(raw)
+
     def test_preview_hz_is_preserved(self):
         cfg = config_from_dict(latest_config_dict(gui={"live_preview": True, "preview_hz": 3.5}))
         self.assertEqual(cfg.schema_version, SCHEMA_VERSION)

@@ -76,6 +76,7 @@ class CaptureLoopbackTests(unittest.TestCase):
             self.assertEqual(cam["frames_received"], 20)
             self.assertEqual(cam["images_written"], 20)
             self.assertEqual(cam["video_queue_drops"], 0)
+            self.assertTrue(cam["video_backend"].startswith("opencv:"))
             self.assertEqual(len(list((root / "capture" / "logs").glob("recorder-*.log"))), 1)
 
     def test_one_port_disconnect_does_not_stop_other_port(self):

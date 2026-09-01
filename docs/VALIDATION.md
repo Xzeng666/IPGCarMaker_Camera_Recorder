@@ -10,11 +10,14 @@ Automated coverage includes:
 
 - strict schema rejection of missing/unknown/old fields
 - protocol header/payload parsing and resynchronization
+- mutable receive-buffer return without a final payload copy
 - stoppable blocking recv/reconnect
 - independent multi-port disconnect behavior
 - 30 FPS → 30 Hz exact image sampling loopback
 - BGR→RGB PPM and G16 big-endian PGM
 - RGB/BGR/G8/G16 decoder matrix
+- zero-copy native BGR decoding view
+- hardware encoder selection, CPU fallback, and required-hardware failure
 - RingBuffer dropped/high-watermark visibility
 - Image Writer failure propagation
 - Video resolution-change segmentation

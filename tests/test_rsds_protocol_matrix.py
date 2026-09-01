@@ -26,7 +26,9 @@ class RsdsProtocolMatrixTests(unittest.TestCase):
         try:
             payload = b"abcdef"
             left.sendall(payload)
-            self.assertEqual(recv_exact(right, len(payload)), payload)
+            received = recv_exact(right, len(payload))
+            self.assertIsInstance(received, bytearray)
+            self.assertEqual(received, payload)
         finally:
             left.close(); right.close()
 

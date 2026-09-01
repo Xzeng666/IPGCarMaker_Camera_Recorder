@@ -1,11 +1,13 @@
 from dataclasses import dataclass
 from typing import Optional
 
+ReadableBuffer = bytes | bytearray | memoryview
+
 
 @dataclass(slots=True)
 class Message:
-    header: bytes
-    data: Optional[bytes]
+    header: bytes | bytearray
+    data: Optional[ReadableBuffer]
     domain: str
     port: int
     received_epoch: float
@@ -18,7 +20,7 @@ class CamFrame:
     sim_time: float
     width: int
     height: int
-    payload: bytes
+    payload: ReadableBuffer
     received_epoch: float = 0.0
     source_port: int = 0
 
@@ -30,6 +32,6 @@ class ImageTask:
     sim_time: float
     width: int
     height: int
-    payload: bytes
+    payload: ReadableBuffer
     domain: str
     port: int

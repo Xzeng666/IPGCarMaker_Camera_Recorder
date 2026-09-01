@@ -4,7 +4,7 @@ import socket
 from typing import Optional, Tuple
 
 
-def recv_exact(sock: socket.socket, n: int) -> Optional[bytes]:
+def recv_exact(sock: socket.socket, n: int) -> Optional[bytearray]:
     buf = bytearray(n)
     mv = memoryview(buf)
     got = 0
@@ -18,10 +18,10 @@ def recv_exact(sock: socket.socket, n: int) -> Optional[bytes]:
         if read == 0:
             return None
         got += read
-    return bytes(buf)
+    return buf
 
 
-def read_header_resync(sock: socket.socket, header_size: int) -> Optional[bytes]:
+def read_header_resync(sock: socket.socket, header_size: int) -> Optional[bytearray]:
     hdr = recv_exact(sock, header_size)
     if hdr is None:
         return None
@@ -44,7 +44,7 @@ def read_header_resync(sock: socket.socket, header_size: int) -> Optional[bytes]
         hdr = remain + extra
 
 
-def header_to_words(header: bytes) -> Tuple[str, list[str]]:
+def header_to_words(header: bytes | bytearray) -> Tuple[str, list[str]]:
     text = header.decode("ascii", errors="ignore").strip("\x00 ").strip()
     if not text:
         return "", []

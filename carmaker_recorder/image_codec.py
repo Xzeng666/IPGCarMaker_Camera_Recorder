@@ -5,6 +5,8 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
+from .models import ReadableBuffer
+
 
 def choose_export_format(configured: str, fmt: str, payload_len: int, w: int, h: int) -> str:
     source_fmt = (fmt or "").lower()
@@ -33,7 +35,13 @@ def build_image_header(export_fmt: str, w: int, h: int) -> Tuple[str, bytes]:
     return "raw", b""
 
 
-def prepare_export_payload(payload: bytes, source_fmt: str, export_fmt: str, w: int, h: int) -> bytes | None:
+def prepare_export_payload(
+    payload: ReadableBuffer,
+    source_fmt: str,
+    export_fmt: str,
+    w: int,
+    h: int,
+) -> ReadableBuffer | None:
     """Return bytes conforming to the target raw image format.
 
     PPM P6 requires RGB channel order. PGM16 requires big-endian samples by the
@@ -63,7 +71,12 @@ def prepare_export_payload(payload: bytes, source_fmt: str, export_fmt: str, w: 
     return None
 
 
-def decode_payload_to_bgr(payload: bytes, fmt: str, w: int, h: int) -> Optional[np.ndarray]:
+def decode_payload_to_bgr(
+    payload: ReadableBuffer,
+    fmt: str,
+    w: int,
+    h: int,
+) -> Optional[np.ndarray]:
     fmt = (fmt or "").lower()
 
     if fmt in ("rgb", "bgr"):
@@ -73,7 +86,8 @@ def decode_payload_to_bgr(payload: bytes, fmt: str, w: int, h: int) -> Optional[
         frame = arr.reshape((h, w, 3))
         if fmt == "rgb":
             return frame[:, :, ::-1].copy()
-        return frame.copy()
+        frame.setflags(write=False)
+        return frame
 
     if fmt in ("gray", "grey", "g8"):
         arr = np.frombuffer(payload, dtype=np.uint8)

@@ -174,6 +174,7 @@ class RecorderMonitor:
                     "bytes_received": 0,
                     "preview_jpeg": None,
                     "video_writer": "IDLE",
+                    "video_backend": None,
                     "image_writer": "IDLE",
                     "last_error": None,
                 },
@@ -260,6 +261,11 @@ class RecorderMonitor:
             entry[key] = state.upper()
             if error:
                 entry["last_error"] = error
+
+    def set_video_backend(self, cam_id: str, backend: str) -> None:
+        with self._lock:
+            entry = self._cameras.setdefault(str(cam_id), {"name": self.config.camera_name(cam_id)})
+            entry["video_backend"] = str(backend)
 
     def add_error(self, component: str, message: str, *, fatal: bool = False) -> None:
         event = {"epoch": time.time(), "component": component, "message": str(message), "fatal": bool(fatal)}

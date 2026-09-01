@@ -18,6 +18,7 @@ from .image_codec import (
 )
 from .models import CamFrame, ImageTask
 from .ring_buffer import RingBuffer
+from .video_encoder import VideoEncoder, create_video_encoder
 
 LOG = logging.getLogger(__name__)
 ErrorCallback = Callable[[str, str, Exception], None]
@@ -114,7 +115,8 @@ class ImageSaver(threading.Thread):
                     )
                     if not ok:
                         raise RuntimeError(f"JPEG encode failed for camera {task.cam_id}")
-                    tmp.write_bytes(encoded.tobytes())
+                    with tmp.open("wb") as f:
+                        f.write(memoryview(encoded).cast("B"))
                 else:
                     output_payload = prepare_export_payload(
                         task.payload,
@@ -165,7 +167,7 @@ class CameraWriter(threading.Thread):
         self.error_callback = error_callback
         self.rb: RingBuffer[CamFrame] = RingBuffer(config.buffers.frame_capacity)
         self.stop_evt = threading.Event()
-        self.writer: Optional[cv2.VideoWriter] = None
+        self.writer: Optional[VideoEncoder] = None
         self.file_path: Optional[Path] = None
         self.current_size: tuple[int, int] | None = None
         self.segment_index = 0
@@ -207,24 +209,32 @@ class CameraWriter(threading.Thread):
         self.file_path = self.videos_dir / (
             f"{self.cam_id}_{camera_view}_{self.system_time_str}_part{self.segment_index:03d}.{ext}"
         )
-        fourcc = cv2.VideoWriter_fourcc(*self.config.video.fourcc)
-        writer = cv2.VideoWriter(
-            str(self.file_path),
-            fourcc,
-            float(self.config.video.fps),
-            (w, h),
-            True,
+        writer, fallback_reason = create_video_encoder(
+            self.file_path,
+            self.config.video,
+            w,
+            h,
         )
-        if not writer.isOpened():
-            writer.release()
-            raise RuntimeError(f"VideoWriter open failed: {self.file_path}")
         self.writer = writer
         self.current_size = (w, h)
         self.t0 = sim_time
         self.last_sim_time = None
         self.last_target_idx = -1
         self.last_frame_bgr = None
-        LOG.info("Camera %s opened video segment %s (%s)", self.cam_id, self.file_path, reason)
+        if self.monitor is not None:
+            self.monitor.set_video_backend(self.cam_id, writer.backend_name)
+            if fallback_reason and self.config.video.backend != "auto":
+                self.monitor.add_warning(f"video_writer:{self.cam_id}", fallback_reason)
+        if fallback_reason:
+            log = LOG.info if self.config.video.backend == "auto" else LOG.warning
+            log("Camera %s: %s; using %s", self.cam_id, fallback_reason, writer.backend_name)
+        LOG.info(
+            "Camera %s opened video segment %s (%s, backend=%s)",
+            self.cam_id,
+            self.file_path,
+            reason,
+            writer.backend_name,
+        )
 
     def _fail(self, exc: Exception) -> None:
         self.healthy = False
@@ -310,7 +320,12 @@ class CameraWriter(threading.Thread):
             LOG.exception("Video writer %s failed", self.cam_id)
             self._fail(exc)
         finally:
-            self._release_writer()
+            try:
+                self._release_writer()
+            except Exception as exc:
+                LOG.exception("Video writer %s failed while closing", self.cam_id)
+                if self.healthy:
+                    self._fail(exc)
             if self.monitor is not None and self.healthy:
                 self.monitor.set_writer_state(self.cam_id, "video", "STOPPED")
             LOG.info(
